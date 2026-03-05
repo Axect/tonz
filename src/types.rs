@@ -7,6 +7,7 @@ pub struct EntryInfo {
     pub is_dir: bool,
     pub is_hidden: bool,
     pub is_estimate: bool,
+    pub is_symlink: bool,
 }
 
 #[derive(Debug)]

@@ -3,7 +3,6 @@ use owo_colors::OwoColorize;
 
 const SIZE_COL_WIDTH: usize = 9;
 const MIN_BAR_WIDTH: usize = 10;
-const DEFAULT_BAR_WIDTH: usize = 24;
 const MAX_NAME_WIDTH: usize = 30;
 const PROMOTE_THRESHOLD: f64 = 0.05;
 const HIGHLIGHT_THRESHOLD: f64 = 0.25;
@@ -30,22 +29,31 @@ fn render_tty(result: &ScanResult, config: &Config) {
     let total = result.total_size.max(1);
 
     // Column widths
-    let name_width = MAX_NAME_WIDTH.min(term_width / 3);
-    let padding = 6; // spaces between columns
-    let pct_col = 5; // " XXX%"
-    let remaining = term_width.saturating_sub(name_width + SIZE_COL_WIDTH + pct_col + padding);
-    let bar_width = if config.sparkline {
-        3
-    } else {
-        remaining
-            .max(MIN_BAR_WIDTH)
-            .min(DEFAULT_BAR_WIDTH.max(remaining))
-    };
+    // Overhead: indent(2) + gap(2) + gap(2) + SIZE_COL_WIDTH(9) + gap(2) + pct(4) = 21
+    // Add 5 for "  (!)" marker when promoted hidden entries exist
+    let has_promoted_hidden = !config.show_hidden
+        && result.hidden_entries.iter().any(|e| {
+            (e.size as f64 / total as f64) > PROMOTE_THRESHOLD
+        });
+    let overhead = 2 + 2 + 2 + SIZE_COL_WIDTH + 2 + 4 + if has_promoted_hidden { 5 } else { 0 };
+    let mut name_width = MAX_NAME_WIDTH.min(term_width / 3);
+    let mut remaining = term_width.saturating_sub(name_width + overhead);
+    if !config.sparkline && remaining < MIN_BAR_WIDTH {
+        let deficit = MIN_BAR_WIDTH - remaining;
+        name_width = name_width.saturating_sub(deficit);
+        remaining = term_width.saturating_sub(name_width + overhead);
+    }
+    let bar_width = if config.sparkline { 3 } else { remaining };
 
     for entry in &display_entries {
         let ratio = entry.size as f64 / total as f64;
         let pct = (ratio * 100.0) as u64;
-        let name_display = truncate_name(&entry.name, name_width);
+        let display_name = if entry.is_symlink {
+            format!("@{}", entry.name)
+        } else {
+            entry.name.clone()
+        };
+        let name_display = truncate_name(&display_name, name_width);
         let bar = if config.sparkline {
             make_sparkline(ratio)
         } else {
@@ -68,7 +76,13 @@ fn render_tty(result: &ScanResult, config: &Config) {
         let padded_pct = format!("{:>3}%", pct);
 
         if color {
-            if ratio > HIGHLIGHT_THRESHOLD {
+            if entry.is_symlink {
+                print!("  {}", padded_name.magenta());
+                print!("  {}", bar.dimmed());
+                print!("  {}", padded_size.dimmed());
+                print!(" {}", size_unit.dimmed());
+                print!("  {}", padded_pct.dimmed());
+            } else if ratio > HIGHLIGHT_THRESHOLD {
                 print!("  {}", padded_name.bold().bright_cyan());
                 print!("  {}", bar.bold());
                 print!("  {}", padded_size.bold());
@@ -188,8 +202,8 @@ fn render_json(result: &ScanResult, config: &Config) {
         let pct = (entry.size as f64 / total) * 100.0;
         let name = entry.name.replace('\\', "\\\\").replace('"', "\\\"");
         println!(
-            "{{\"name\":\"{}\",\"size\":{},\"is_dir\":{},\"is_hidden\":{},\"is_estimate\":{},\"percentage\":{:.1}}}",
-            name, entry.size, entry.is_dir, entry.is_hidden, entry.is_estimate, pct
+            "{{\"name\":\"{}\",\"size\":{},\"is_dir\":{},\"is_hidden\":{},\"is_estimate\":{},\"is_symlink\":{},\"percentage\":{:.1}}}",
+            name, entry.size, entry.is_dir, entry.is_hidden, entry.is_estimate, entry.is_symlink, pct
         );
     }
 }
@@ -209,6 +223,7 @@ fn prepare_entries(
             size: e.size,
             is_hidden: false,
             is_estimate: e.is_estimate,
+            is_symlink: e.is_symlink,
         })
         .collect();
 
@@ -219,6 +234,7 @@ fn prepare_entries(
                 size: e.size,
                 is_hidden: false,
                 is_estimate: e.is_estimate,
+                is_symlink: e.is_symlink,
             });
         }
         (entries, None)
@@ -234,6 +250,7 @@ fn prepare_entries(
                     size: e.size,
                     is_hidden: true,
                     is_estimate: e.is_estimate,
+                    is_symlink: e.is_symlink,
                 });
             } else {
                 agg_size += e.size;
@@ -255,6 +272,7 @@ struct DisplayEntry {
     size: u64,
     is_hidden: bool,
     is_estimate: bool,
+    is_symlink: bool,
 }
 
 fn format_size(bytes: u64) -> (String, String) {

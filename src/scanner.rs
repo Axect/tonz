@@ -62,6 +62,7 @@ pub fn scan(config: &Config) -> ScanResult {
         is_hidden: bool,
         size: u64,
         needs_scan: bool,
+        is_symlink: bool,
     }
 
     let mut children: Vec<Child> = Vec::with_capacity(dir_entries.len());
@@ -97,6 +98,7 @@ pub fn scan(config: &Config) -> ScanResult {
                             is_hidden,
                             size: 0,
                             needs_scan: false,
+                            is_symlink: false,
                         });
                         continue;
                     }
@@ -109,6 +111,7 @@ pub fn scan(config: &Config) -> ScanResult {
                 is_hidden,
                 size: 0,
                 needs_scan: true,
+                is_symlink: false,
             });
         } else if meta.is_file() || meta.is_symlink() {
             children.push(Child {
@@ -118,6 +121,7 @@ pub fn scan(config: &Config) -> ScanResult {
                 is_hidden,
                 size: meta.len(),
                 needs_scan: false,
+                is_symlink: meta.is_symlink(),
             });
         }
     }
@@ -194,6 +198,7 @@ pub fn scan(config: &Config) -> ScanResult {
             is_dir: child.is_dir,
             is_hidden: child.is_hidden,
             is_estimate: estimate_set.contains(&i),
+            is_symlink: child.is_symlink,
         };
         if child.is_hidden {
             hidden_entries.push(info);

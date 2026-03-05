@@ -8,10 +8,10 @@ use std::path::PathBuf;
 
 use types::{Config, DisplayMode};
 
-/// heft — See what's heavy
+/// tonz — See what's heavy
 #[derive(Parser, Debug)]
 #[command(
-    name = "heft",
+    name = "tonz",
     version,
     about = "See what's heavy — a modern, fast disk usage viewer"
 )]
