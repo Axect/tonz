@@ -13,6 +13,7 @@ pub fn render(result: &ScanResult, config: &Config, mode: DisplayMode) {
         DisplayMode::Tty => render_tty(result, config),
         DisplayMode::Pipe => render_pipe(result, config),
         DisplayMode::Json => render_json(result, config),
+        DisplayMode::Llm => render_llm(result, config),
     }
 }
 
@@ -184,7 +185,9 @@ fn render_pipe(result: &ScanResult, config: &Config) {
     }
     all.sort_by(|a, b| b.size.cmp(&a.size));
 
-    for entry in &all {
+    let filtered = filter_entries(&all, result.total_size, config.threshold_pct, config.top);
+
+    for entry in &filtered {
         let prefix = if entry.is_estimate { "~" } else { "" };
         println!("{}{}\t{}", prefix, entry.size, entry.name);
     }
@@ -198,13 +201,141 @@ fn render_json(result: &ScanResult, config: &Config) {
     }
     all.sort_by(|a, b| b.size.cmp(&a.size));
 
-    for entry in &all {
+    let filtered = filter_entries(&all, result.total_size, config.threshold_pct, config.top);
+
+    for entry in &filtered {
         let pct = (entry.size as f64 / total) * 100.0;
         let name = entry.name.replace('\\', "\\\\").replace('"', "\\\"");
         println!(
             "{{\"name\":\"{}\",\"size\":{},\"is_dir\":{},\"is_hidden\":{},\"is_estimate\":{},\"is_symlink\":{},\"percentage\":{:.1}}}",
             name, entry.size, entry.is_dir, entry.is_hidden, entry.is_estimate, entry.is_symlink, pct
         );
+    }
+}
+
+fn render_llm(result: &ScanResult, config: &Config) {
+    let total = result.total_size;
+    let item_count = result.entries.len() + result.hidden_entries.len();
+
+    // Collect and sort all entries
+    let mut all: Vec<&EntryInfo> = result.entries.iter().collect();
+    if config.show_hidden {
+        all.extend(result.hidden_entries.iter());
+    }
+    all.sort_by(|a, b| b.size.cmp(&a.size));
+
+    // Apply threshold + top filtering
+    let filtered = filter_entries(&all, total, config.threshold_pct, config.top);
+
+    // Summary header
+    if config.threshold_pct.is_some() || config.top.is_some() {
+        println!(
+            "{} ({}, {} items, {} shown)",
+            config.path.display(),
+            format_size_human(total),
+            item_count,
+            filtered.len()
+        );
+    } else {
+        println!(
+            "{} ({}, {} items)",
+            config.path.display(),
+            format_size_human(total),
+            item_count
+        );
+    }
+
+    if filtered.is_empty() {
+        if let Some(pct) = config.threshold_pct {
+            println!(
+                "(all entries below {:.0}% threshold; use --top or lower --threshold-pct)",
+                pct
+            );
+        }
+        return;
+    }
+
+    for entry in &filtered {
+        let pct = if total > 0 {
+            (entry.size as f64 / total as f64) * 100.0
+        } else {
+            0.0
+        };
+        let suffix = if entry.is_dir {
+            "/"
+        } else if entry.is_symlink {
+            " @"
+        } else {
+            ""
+        };
+        println!(
+            "{}\t{:.0}%\t{}{}",
+            format_size_human(entry.size),
+            pct,
+            entry.name,
+            suffix
+        );
+    }
+}
+
+fn format_size_human(bytes: u64) -> String {
+    const UNITS: &[(u64, &str)] = &[
+        (1_099_511_627_776, "T"),
+        (1_073_741_824, "G"),
+        (1_048_576, "M"),
+        (1_024, "K"),
+    ];
+    for &(threshold, unit) in UNITS {
+        if bytes >= threshold {
+            let val = bytes as f64 / threshold as f64;
+            return if val >= 10.0 {
+                format!("{:.0}{}", val, unit)
+            } else {
+                format!("{:.1}{}", val, unit)
+            };
+        }
+    }
+    format!("{}B", bytes)
+}
+
+fn filter_entries<'a>(
+    entries: &[&'a EntryInfo],
+    total: u64,
+    threshold_pct: Option<f64>,
+    top: Option<usize>,
+) -> Vec<&'a EntryInfo> {
+    // Entries are already sorted by size descending
+    match (threshold_pct, top) {
+        (Some(pct), Some(n)) => {
+            // Union: above threshold OR in top N
+            entries
+                .iter()
+                .enumerate()
+                .filter(|(i, e)| {
+                    let entry_pct = if total > 0 {
+                        (e.size as f64 / total as f64) * 100.0
+                    } else {
+                        0.0
+                    };
+                    entry_pct >= pct || *i < n
+                })
+                .map(|(_, e)| *e)
+                .collect()
+        }
+        (Some(pct), None) => entries
+            .iter()
+            .filter(|e| {
+                let entry_pct = if total > 0 {
+                    (e.size as f64 / total as f64) * 100.0
+                } else {
+                    0.0
+                };
+                entry_pct >= pct
+            })
+            .copied()
+            .collect(),
+        (None, Some(n)) => entries.iter().take(n).copied().collect(),
+        (None, None) => entries.to_vec(),
     }
 }
 

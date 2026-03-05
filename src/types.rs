@@ -38,6 +38,7 @@ pub enum DisplayMode {
     Tty,
     Pipe,
     Json,
+    Llm,
 }
 
 #[derive(Debug)]
@@ -45,8 +46,11 @@ pub struct Config {
     pub path: PathBuf,
     pub show_hidden: bool,
     pub json: bool,
+    pub llm: bool,
     pub sparkline: bool,
     pub across_mounts: bool,
     pub jobs: Option<usize>,
     pub no_color: bool,
+    pub threshold_pct: Option<f64>,
+    pub top: Option<usize>,
 }

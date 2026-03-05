@@ -25,8 +25,12 @@ struct Cli {
     show_hidden: bool,
 
     /// Output as line-delimited JSON
-    #[arg(long)]
+    #[arg(long, conflicts_with = "llm")]
     json: bool,
+
+    /// Output in token-efficient format for AI agents
+    #[arg(long, conflicts_with = "json")]
+    llm: bool,
 
     /// Use compact sparkline visualization
     #[arg(long)]
@@ -43,6 +47,14 @@ struct Cli {
     /// Disable colors
     #[arg(long)]
     no_color: bool,
+
+    /// Hide entries below this percentage of total size
+    #[arg(long, value_name = "N")]
+    threshold_pct: Option<f64>,
+
+    /// Show only the top N entries by size
+    #[arg(long, value_name = "N")]
+    top: Option<usize>,
 }
 
 fn main() {
@@ -52,14 +64,19 @@ fn main() {
         path: cli.path,
         show_hidden: cli.show_hidden,
         json: cli.json,
+        llm: cli.llm,
         sparkline: cli.sparkline,
         across_mounts: cli.across_mounts,
         jobs: cli.jobs,
         no_color: cli.no_color,
+        threshold_pct: cli.threshold_pct,
+        top: cli.top,
     };
 
     let mode = if config.json {
         DisplayMode::Json
+    } else if config.llm {
+        DisplayMode::Llm
     } else if std::io::stdout().is_tty() {
         DisplayMode::Tty
     } else {
@@ -69,4 +86,9 @@ fn main() {
     let result = scanner::scan(&config);
 
     display::render(&result, &config, mode);
+
+    // Semantic exit codes
+    if result.error_count > 0 || result.restricted_count > 0 {
+        std::process::exit(1);
+    }
 }
