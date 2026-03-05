@@ -4,6 +4,11 @@ version = "0.1.0"
 edition = "2024"
 description = "See what's heavy — a modern, fast disk usage viewer"
 license = "MIT"
+repository = "https://github.com/Axect/heft"
+homepage = "https://github.com/Axect/heft"
+readme = "README.md"
+keywords = ["disk-usage", "cli", "terminal", "filesystem"]
+categories = ["command-line-utilities", "filesystem"]
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
