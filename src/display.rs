@@ -33,9 +33,10 @@ fn render_tty(result: &ScanResult, config: &Config) {
     // Overhead: indent(2) + gap(2) + gap(2) + SIZE_COL_WIDTH(9) + gap(2) + pct(4) = 21
     // Add 5 for "  (!)" marker when promoted hidden entries exist
     let has_promoted_hidden = !config.show_hidden
-        && result.hidden_entries.iter().any(|e| {
-            (e.size as f64 / total as f64) > PROMOTE_THRESHOLD
-        });
+        && result
+            .hidden_entries
+            .iter()
+            .any(|e| (e.size as f64 / total as f64) > PROMOTE_THRESHOLD);
     let overhead = 2 + 2 + 2 + SIZE_COL_WIDTH + 2 + 4 + if has_promoted_hidden { 5 } else { 0 };
     let mut name_width = MAX_NAME_WIDTH.min(term_width / 3);
     let mut remaining = term_width.saturating_sub(name_width + overhead);
@@ -208,7 +209,13 @@ fn render_json(result: &ScanResult, config: &Config) {
         let name = entry.name.replace('\\', "\\\\").replace('"', "\\\"");
         println!(
             "{{\"name\":\"{}\",\"size\":{},\"is_dir\":{},\"is_hidden\":{},\"is_estimate\":{},\"is_symlink\":{},\"percentage\":{:.1}}}",
-            name, entry.size, entry.is_dir, entry.is_hidden, entry.is_estimate, entry.is_symlink, pct
+            name,
+            entry.size,
+            entry.is_dir,
+            entry.is_hidden,
+            entry.is_estimate,
+            entry.is_symlink,
+            pct
         );
     }
 }

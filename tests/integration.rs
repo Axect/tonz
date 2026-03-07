@@ -19,8 +19,14 @@ fn llm_mode_has_summary_header() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let first_line = stdout.lines().next().unwrap();
     // Header format: {path} ({size}, {N} items)
-    assert!(first_line.contains("items)"), "header missing 'items)': {first_line}");
-    assert!(first_line.contains("M"), "header should have human-readable size");
+    assert!(
+        first_line.contains("items)"),
+        "header missing 'items)': {first_line}"
+    );
+    assert!(
+        first_line.contains("M"),
+        "header should have human-readable size"
+    );
 }
 
 #[test]
@@ -49,7 +55,10 @@ fn llm_mode_dirs_have_slash_suffix() {
         .lines()
         .find(|l| l.contains("subdir_a"))
         .expect("subdir_a not found");
-    assert!(subdir_line.ends_with('/'), "dir should end with /: {subdir_line}");
+    assert!(
+        subdir_line.ends_with('/'),
+        "dir should end with /: {subdir_line}"
+    );
 }
 
 #[test]
@@ -63,7 +72,10 @@ fn llm_mode_files_no_slash() {
         .lines()
         .find(|l| l.contains("small.txt"))
         .expect("small.txt not found");
-    assert!(!file_line.ends_with('/'), "file should not end with /: {file_line}");
+    assert!(
+        !file_line.ends_with('/'),
+        "file should not end with /: {file_line}"
+    );
 }
 
 #[test]
@@ -91,9 +103,15 @@ fn threshold_pct_filters_small_entries() {
         .expect("failed to run tonz");
     let stdout = String::from_utf8_lossy(&output.stdout);
     // subdir_a (~10M) is ~95% of total → should appear
-    assert!(stdout.contains("subdir_a"), "large dir should pass threshold");
+    assert!(
+        stdout.contains("subdir_a"),
+        "large dir should pass threshold"
+    );
     // small.txt (100B) is ~0% → should be filtered
-    assert!(!stdout.contains("small.txt"), "tiny file should be filtered");
+    assert!(
+        !stdout.contains("small.txt"),
+        "tiny file should be filtered"
+    );
 }
 
 #[test]
@@ -104,7 +122,10 @@ fn threshold_pct_shows_filtered_count_in_header() {
         .expect("failed to run tonz");
     let stdout = String::from_utf8_lossy(&output.stdout);
     let header = stdout.lines().next().unwrap();
-    assert!(header.contains("shown"), "header should show filtered count: {header}");
+    assert!(
+        header.contains("shown"),
+        "header should show filtered count: {header}"
+    );
 }
 
 #[test]
@@ -179,7 +200,11 @@ fn llm_json_conflict() {
         .args(["--llm", "--json", &fixture_path()])
         .output()
         .expect("failed to run tonz");
-    assert_eq!(output.status.code(), Some(2), "conflicting flags should exit 2");
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "conflicting flags should exit 2"
+    );
 }
 
 // ── Exit codes ──────────────────────────────────────────────
