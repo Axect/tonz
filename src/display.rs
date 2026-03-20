@@ -24,10 +24,28 @@ fn render_tty(result: &ScanResult, config: &Config) {
         .max(40);
     let color = supports_color(config);
 
-    let (mut display_entries, hidden_aggregate) = prepare_entries(result, config);
+    let (mut display_entries, mut hidden_aggregate) = prepare_entries(result, config);
     display_entries.sort_by(|a, b| b.size.cmp(&a.size));
 
+    // Apply threshold-pct and top filtering
     let total = result.total_size.max(1);
+    let pre_filter_count = display_entries.len();
+    display_entries =
+        filter_display_entries(display_entries, total, config.threshold_pct, config.top);
+    let filtered_out = pre_filter_count - display_entries.len();
+    if filtered_out > 0 {
+        let filtered_size: u64 = {
+            // Recalculate: total of all entries minus displayed minus already-hidden
+            let displayed_size: u64 = display_entries.iter().map(|e| e.size).sum();
+            let already_hidden: u64 = hidden_aggregate.map(|(_, s)| s).unwrap_or(0);
+            result
+                .total_size
+                .saturating_sub(displayed_size)
+                .saturating_sub(already_hidden)
+        };
+        let (prev_count, prev_size) = hidden_aggregate.unwrap_or((0, 0));
+        hidden_aggregate = Some((prev_count + filtered_out, prev_size + filtered_size));
+    }
 
     // Column widths
     // Overhead: indent(2) + gap(2) + gap(2) + SIZE_COL_WIDTH(9) + gap(2) + pct(4) = 21
@@ -303,6 +321,43 @@ fn format_size_human(bytes: u64) -> String {
         }
     }
     format!("{}B", bytes)
+}
+
+fn filter_display_entries(
+    entries: Vec<DisplayEntry>,
+    total: u64,
+    threshold_pct: Option<f64>,
+    top: Option<usize>,
+) -> Vec<DisplayEntry> {
+    // Entries are already sorted by size descending
+    match (threshold_pct, top) {
+        (Some(pct), Some(n)) => entries
+            .into_iter()
+            .enumerate()
+            .filter(|(i, e)| {
+                let entry_pct = if total > 0 {
+                    (e.size as f64 / total as f64) * 100.0
+                } else {
+                    0.0
+                };
+                entry_pct >= pct || *i < n
+            })
+            .map(|(_, e)| e)
+            .collect(),
+        (Some(pct), None) => entries
+            .into_iter()
+            .filter(|e| {
+                let entry_pct = if total > 0 {
+                    (e.size as f64 / total as f64) * 100.0
+                } else {
+                    0.0
+                };
+                entry_pct >= pct
+            })
+            .collect(),
+        (None, Some(n)) => entries.into_iter().take(n).collect(),
+        (None, None) => entries,
+    }
 }
 
 fn filter_entries<'a>(
